@@ -1,35 +1,79 @@
 import requests
-from tinydb import TinyDB
+from sqlalchemy import create_engine, Column, String, Float, Integer, DateTime
+from sqlalchemy.orm import declarative_base, sessionmaker
 from datetime import datetime
 from time import sleep
+from dotenv import load_dotenv
+import os
 
+load_dotenv()
 
-def extrair_preco_btc():
-    url = "https://api.coinbase.com/v2/prices/BTC-USD/spot"
-    response = requests.get(url)
-    return response.json()
+# Configurações do banco de dados
+DATABASE_URL = os.getenv("DATABASE_KEY")
+if not DATABASE_URL:
+    raise ValueError("DATABASE_KEY não encontrada no arquivo .env")
 
-def transformar_preco_btc(dados_json):
-    valor = dados_json['data']['amount']
-    cripto = dados_json['data']['base']
+# Criação do engine e sessão
+try:
+    engine = create_engine(DATABASE_URL)
+    Session = sessionmaker(bind=engine)
+    Base = declarative_base()
+except Exception as e:
+    print(f"Erro ao conectar ao banco de dados: {e}")
+    print(f"String de conexão: {DATABASE_URL}")
+    raise
+
+# Definição do modelo de dados
+class BitcoinDados(Base):
+    __tablename__ = "bitcoin_dados"
+    
+    id = Column(Integer, primary_key=True)
+    valor = Column(Float)
+    criptomoeda = Column(String(10))
+    moeda = Column(String(10))
+    timestamp = Column(DateTime)
+
+# Cria a tabela (se não existir)
+Base.metadata.create_all(engine)
+
+def extrair_dados_bitcoin():
+    """Extrai o JSON completo da API da Coinbase."""
+    url = 'https://api.coinbase.com/v2/prices/spot'
+    resposta = requests.get(url)
+    return resposta.json()
+
+def tratar_dados_bitcoin(dados_json):
+    """Transforma os dados brutos da API e adiciona timestamp."""
+    valor = float(dados_json['data']['amount'])
+    criptomoeda = dados_json['data']['base']
     moeda = dados_json['data']['currency']
-    dados_tratador = {
-        'valor': valor,
-        'cripto': cripto,
-        'moeda': moeda,
-        'data': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    }
-    return dados_tratador
+    dados_tratados = BitcoinDados(
+        valor=valor,
+        criptomoeda=criptomoeda,
+        moeda=moeda,
+        timestamp=datetime.now()
+    )
+    return dados_tratados
 
-def load(dados_tratados):
-    db = TinyDB('db.json')
-    db.insert(dados_tratados)
-    print("Dados inseridos com sucesso!")
-    
-    
+
+def salvar_dados_sqlalchemy(dados):
+    """Salva os dados no PostgreSQL usando SQLAlchemy."""
+    with Session() as session:
+        session.add(dados)
+        session.commit()
+        print("Dados salvos no PostgreSQL!")
+
 if __name__ == "__main__":
     while True:
-        dados_json = extrair_preco_btc()
-        dados_tratados = transformar_preco_btc(dados_json)
-        load(dados_tratados)
-        sleep(20)
+        # Extração e tratamento dos dados
+        dados_json = extrair_dados_bitcoin()
+        dados_tratados = tratar_dados_bitcoin(dados_json)
+
+        # Mostrar os dados tratados
+        print("Dados Tratados:")        
+        # Salvar no PostgreSQL
+        salvar_dados_sqlalchemy(dados_tratados)
+
+        # Pausar por 15 segundos
+        print("Aguardando 15 segundos...")
+        sleep(15)
