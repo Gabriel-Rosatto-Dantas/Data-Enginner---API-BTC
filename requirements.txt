@@ -1,0 +1,15 @@
+# API e Framework
+agno==0.1.0
+requests==2.31.0
+
+# Banco de Dados
+psycopg2-binary==2.9.9
+SQLAlchemy==2.0.23
+
+# Dashboard e Visualização
+streamlit==1.29.0
+pandas==2.1.3
+plotly==5.18.0
+
+# Utilitários
+python-dotenv==1.0.0 
